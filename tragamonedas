@@ -1,0 +1,161 @@
+import threading
+import random
+import time
+import tkinter as tk
+from tkinter import messagebox
+
+# ===== Modelo (Model) =====
+class Symbol:
+    """
+    Representa un símbolo en el tragamonedas.
+    Atributos:
+        symbol (str): El símbolo visual.
+        value (int): El valor del símbolo.
+    """
+    def __init__(self, symbol, value):
+        self.symbol = symbol
+        self.value = value
+
+class Reel:
+    """
+    Representa un carrete con símbolos.
+    Atributos:
+        symbols (list): Lista de símbolos posibles.
+        current_symbol (Symbol): El símbolo actual en el carrete.
+    """
+    def __init__(self):
+        self.symbols = [
+            Symbol("🍒", 10), Symbol("🍋", 15), Symbol("🔔", 20),
+            Symbol("⭐", 25), Symbol("🍀", 30), Symbol("💎", 50)
+        ]
+        self.current_symbol = random.choice(self.symbols)
+
+    def spin(self):
+        """ Simula el giro del carrete. """
+        time.sleep(random.uniform(0.5, 1.5))  # Simula tiempo de giro
+        self.current_symbol = random.choice(self.symbols)
+
+class SlotMachine:
+    """
+    Representa la máquina tragamonedas y su lógica de juego.
+    Atributos:
+        reels (list): Lista de carretes.
+        credits (int): Créditos disponibles.
+    """
+    def __init__(self):
+        self.reels = [Reel(), Reel(), Reel()]
+        self.credits = 100  # Créditos iniciales
+
+    def spin_reels(self):
+        """ Gira los carretes de manera concurrente. """
+        threads = []
+        for reel in self.reels:
+            t = threading.Thread(target=reel.spin)
+            threads.append(t)
+            t.start()
+
+        for t in threads:
+            t.join()
+
+    def calculate_payout(self, bet):
+        """ Calcula la ganancia basada en los resultados. """
+        symbols = [reel.current_symbol for reel in self.reels]
+
+        if symbols[0].symbol == symbols[1].symbol == symbols[2].symbol:
+            return bet * symbols[0].value  # Gana el valor del símbolo multiplicado por la apuesta
+        return 0  # No gana nada
+
+    def play(self, bet):
+        """ Ejecuta una ronda del juego. """
+        if bet > self.credits:
+            messagebox.showerror("Error", "No tienes suficientes créditos.")
+            return
+
+        self.credits -= bet
+        self.spin_reels()
+        winnings = self.calculate_payout(bet)
+        self.credits += winnings
+
+        return winnings, [reel.current_symbol.symbol for reel in self.reels], self.credits
+
+# ===== Vista (View) =====
+class View:
+    """
+    Maneja la interacción con el usuario a través de una interfaz gráfica.
+    Atributos:
+        root (tk.Tk): La ventana principal de la aplicación.
+        credits_label (tk.Label): Etiqueta que muestra los créditos disponibles.
+        bet_entry (tk.Entry): Campo de entrada para la apuesta.
+        spin_button (tk.Button): Botón para girar los carretes.
+        reels_label (tk.Label): Etiqueta que muestra los carretes.
+        result_label (tk.Label): Etiqueta que muestra el resultado de la apuesta.
+        controller (Controller): El controlador que maneja la lógica del juego.
+    """
+    def __init__(self, root):
+        self.root = root
+        self.root.title("Tragamonedas")
+
+        self.credits_label = tk.Label(root, text=f"💰 Créditos disponibles: {100}")
+        self.credits_label.pack()
+
+        self.bet_entry = tk.Entry(root)
+        self.bet_entry.pack()
+
+        self.spin_button = tk.Button(root, text="Girar", command=self.spin)
+        self.spin_button.pack()
+
+        self.reels_label = tk.Label(root, text="🎰  ? | ? | ?  🎰")
+        self.reels_label.pack()
+
+        self.result_label = tk.Label(root, text="")
+        self.result_label.pack()
+
+        self.controller = Controller(self)
+
+    def display_reels(self, reels):
+        """ Muestra los carretes en la pantalla. """
+        self.reels_label.config(text=f"🎰  {' | '.join(reels)}  🎰")
+
+    def display_credits(self, credits):
+        """ Muestra los créditos del jugador. """
+        self.credits_label.config(text=f"💰 Créditos disponibles: {credits}")
+
+    def display_result(self, winnings):
+        """ Muestra el resultado de la apuesta. """
+        if winnings > 0:
+            self.result_label.config(text=f"🎉 ¡Ganaste {winnings} créditos! 🎉")
+        else:
+            self.result_label.config(text="❌ No ganaste esta vez. ¡Inténtalo de nuevo!")
+
+    def spin(self):
+        """ Maneja el evento de girar los carretes. """
+        try:
+            bet = int(self.bet_entry.get())
+            self.controller.play(bet)
+        except ValueError:
+            messagebox.showerror("Error", "Ingresa un número válido.")
+
+# ===== Controlador (Controller) =====
+class Controller:
+    """
+    Maneja la lógica del juego y la interfaz de usuario.
+    Atributos:
+        slot_machine (SlotMachine): La máquina tragamonedas.
+        view (View): La vista que interactúa con el usuario.
+    """
+    def __init__(self, view):
+        self.slot_machine = SlotMachine()
+        self.view = view
+
+    def play(self, bet):
+        """ Ejecuta una ronda del juego. """
+        winnings, reels, credits = self.slot_machine.play(bet)
+        self.view.display_reels(reels)
+        self.view.display_result(winnings)
+        self.view.display_credits(credits)
+
+# ===== Iniciar el juego =====
+if __name__ == "__main__":
+    root = tk.Tk()
+    game_view = View(root)
+    root.mainloop()
